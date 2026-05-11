@@ -1,11 +1,66 @@
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+*.egg
 *.egg-info/
 dist/
 build/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
 .env
+.env.*
 .venv/
 venv/
+env/
+ENV/
+
+# Test / coverage / type-check artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pytype/
+.ruff_cache/
+coverage.xml
+*.cover
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE / editor
 .idea/
 .vscode/
 *.iml
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local data and simulation outputs
+data/
+*.csv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+outputs/
+results/
+artifacts/
+benchmarks/*.json
+*.log
