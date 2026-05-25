@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    name: Smoke test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Import package
+        run: python -c "import mc_risk; print('imports ok')"
+
+      - name: Run lightweight simulation smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from mc_risk import MonteCarloEngine, InstrumentSpec, VaRCalculator, PortfolioRiskAggregator
+
+          rng = np.random.default_rng(0)
+          hist_a = rng.normal(0.0002, 0.02, size=300)
+          hist_b = rng.normal(0.0001, 0.015, size=300)
+
+          specs = [
+              InstrumentSpec("A", 100.0, returns_history=hist_a),
+              InstrumentSpec("B", 150.0, returns_history=hist_b),
+          ]
+
+          engine = MonteCarloEngine(n_simulations=1_000, n_steps=30, seed=123)
+          sim = engine.simulate(specs)
+
+          positions = {"A": 1_000_000, "B": 500_000}
+
+          var_calc = VaRCalculator(confidence_levels=[0.95])
+          results = var_calc.monte_carlo(sim, positions)
+
+          assert len(results) == 2
+          assert all(r.var_abs == r.var_abs for r in results)
+
+          report = PortfolioRiskAggregator(confidence_level=0.95).build_report(sim, positions)
+          assert report.total_portfolio_value == 1_500_000
+
+          print("smoke test passed")
+          PY
