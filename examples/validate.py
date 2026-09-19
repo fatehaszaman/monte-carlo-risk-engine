@@ -25,8 +25,8 @@ Exit code is non-zero if any check fails.
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -34,10 +34,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
 
 from mc_risk import (
-    MonteCarloEngine,
     InstrumentSpec,
-    VaRCalculator,
+    MonteCarloEngine,
     PortfolioRiskAggregator,
+    VaRCalculator,
 )
 
 

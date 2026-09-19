@@ -20,14 +20,14 @@ and provide little hedging value against each other.
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
+import pandas as pd
+
 from .simulation import SimulationResult
-from .var_cvar import VaRResult, VaRCalculator
 from .stress_test import StressResult
+from .var_cvar import VaRCalculator
 
 
 @dataclass
@@ -81,7 +81,7 @@ class PortfolioRiskReport:
             print(f"  {inst:<20} ${pos:>11,.0f} ${var:>11,.0f} ${cvar:>11,.0f} {conc:>7.1f}%")
 
         if self.stress_summary is not None and not self.stress_summary.empty:
-            print(f"\n  Stress Scenarios (CVaR 95% shift vs base):")
+            print("\n  Stress Scenarios (CVaR 95% shift vs base):")
             print("  " + "-" * 68)
             for _, row in self.stress_summary.drop_duplicates("scenario").iterrows():
                 # Average shift across instruments

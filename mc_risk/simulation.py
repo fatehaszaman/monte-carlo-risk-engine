@@ -25,10 +25,10 @@ derived statistics used by the VaR/CVaR calculator.
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
+
+import numpy as np
 
 
 @dataclass
