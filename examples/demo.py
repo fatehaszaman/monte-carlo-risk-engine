@@ -8,16 +8,19 @@ structure, computes VaR/CVaR at 95% and 99%, runs stress scenarios,
 and prints a full portfolio risk report.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
+
 from mc_risk import (
-    MonteCarloEngine, InstrumentSpec,
-    VaRCalculator,
-    StressTester,
+    InstrumentSpec,
+    MonteCarloEngine,
     PortfolioRiskAggregator,
+    StressTester,
+    VaRCalculator,
 )
 
 # ── 1. Define portfolio ───────────────────────────────────────────────────────
@@ -68,11 +71,11 @@ sim_result = engine.simulate(instruments)
 
 print(f"Simulated {sim_result.params['n_simulations']:,} paths × "
       f"{sim_result.params['n_steps']} steps")
-print(f"\nEstimated annual vols:")
+print("\nEstimated annual vols:")
 for i, inst in enumerate(sim_result.instruments):
     print(f"  {inst}: {sim_result.params['sigmas'][i]*100:.1f}%")
 
-print(f"\nCorrelation matrix:")
+print("\nCorrelation matrix:")
 corr_df_str = "\n".join(
     f"  {sim_result.instruments[i]}: " +
     "  ".join(f"{sim_result.correlation_matrix[i,j]:+.2f}"
@@ -94,7 +97,7 @@ print(var_df[["name", "confidence_level", "var_pct", "cvar_pct",
               "var_abs", "cvar_abs"]].to_string(index=False))
 
 # Historical VaR on first instrument for comparison
-print(f"\n  Historical VaR/CVaR (INST_A, for comparison):")
+print("\n  Historical VaR/CVaR (INST_A, for comparison):")
 hist_results = var_calc.historical(
     hist_returns[:, 0], position_values["INST_A"], "INST_A (hist)"
 )
@@ -107,7 +110,7 @@ print("\nRunning stress scenarios...")
 stress_tester = StressTester(rng_seed=42)
 stress_results = stress_tester.run_all(sim_result)
 
-print(f"\n  Stress scenario CVaR shifts (vs base, 95%):")
+print("\n  Stress scenario CVaR shifts (vs base, 95%):")
 for sr in stress_results:
     avg_shift = sum(sr.cvar_95_shift.values()) / len(sr.cvar_95_shift)
     worst = min(sr.worst_case_return.values())

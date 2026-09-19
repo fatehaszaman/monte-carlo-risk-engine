@@ -28,12 +28,13 @@ Shock types
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .simulation import SimulationResult, MonteCarloEngine, InstrumentSpec
+import numpy as np
+import pandas as pd
+
+from .simulation import SimulationResult
 
 
 @dataclass
@@ -172,7 +173,6 @@ class StressTester:
         vol_multiplier_all : float, optional
             Apply this vol multiplier to all instruments.
         """
-        n_inst = len(base_result.instruments)
         n_sims = base_result.terminal_returns.shape[1]
         n_shocked = max(1, int(n_sims * scenario.n_paths_pct))
 
