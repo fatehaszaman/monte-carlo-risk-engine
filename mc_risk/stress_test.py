@@ -23,7 +23,8 @@ Shock types
 -----------
 - Price shock: immediate step change to one or more instruments
 - Volatility shock: scale the vol of simulation paths post-hoc
-- Correlation shock: re-run simulation with a stressed correlation matrix
+- Correlation shocks are unsupported here and raise NotImplementedError.
+  They require a separately parameterized simulation, not a terminal-return edit.
 """
 
 from __future__ import annotations
@@ -53,8 +54,8 @@ class StressScenario:
         {instrument_name: multiplier} — scale realized vol.
         e.g. {"crude_oil": 2.0} doubles volatility in this scenario.
     correlation_override : np.ndarray, optional
-        Replace the correlation matrix for this scenario.
-        Useful for stress-testing correlation breakdown or spike.
+        Reserved for a future re-simulation API. Any non-None value raises
+        NotImplementedError; it is never silently ignored.
     n_paths_pct : float
         Fraction of total simulations to apply this shock to.
         Default 0.10 (shock applied to worst 10% of paths).
@@ -79,11 +80,11 @@ class StressResult:
         Shape (n_instruments, n_simulations).
         Terminal returns with stress scenario applied to a subset of paths.
     var_95_shift : dict[str, float]
-        Change in 95% VaR (as %) vs base simulation, per instrument.
+        Change in the 95% loss quantile of log returns, per instrument.
     cvar_95_shift : dict[str, float]
-        Change in 95% CVaR (as %) vs base simulation.
-    worst_case_pnl : dict[str, float]
-        Worst-case P&L per instrument across all stressed paths.
+        Change in log-return tail loss vs base simulation.
+    worst_case_return : dict[str, float]
+        Minimum log return, not dollar P&L or arithmetic return.
     """
     scenario_name: str
     description: str
@@ -110,28 +111,21 @@ class StressResult:
 DEFAULT_STRESS_SCENARIOS = [
     StressScenario(
         name="Sharp_Selloff",
-        description="Broad 20% price decline across all instruments",
+        description="20% price decline on each instrument's worst 5% of paths",
         price_shocks={},      # Applied to all instruments in run_all
         vol_multipliers={},
         n_paths_pct=0.05,
     ),
     StressScenario(
         name="Vol_Spike",
-        description="2x volatility spike — fat-tail / crisis conditions",
+        description="2x dispersion about the mean within each instrument's worst 10% of log-return paths",
         price_shocks={},
         vol_multipliers={},   # Applied to all instruments
         n_paths_pct=0.10,
     ),
     StressScenario(
-        name="Correlation_Breakdown",
-        description="Correlations go to zero — diversification disappears",
-        price_shocks={},
-        vol_multipliers={},
-        n_paths_pct=0.10,
-    ),
-    StressScenario(
         name="Supply_Shock",
-        description="Primary commodity -30%, secondary instruments -10%",
+        description="15% price decline on each instrument's worst 5% of paths",
         price_shocks={},
         vol_multipliers={},
         n_paths_pct=0.05,
@@ -169,12 +163,22 @@ class StressTester:
         base_result : SimulationResult
         scenario : StressScenario
         price_shock_all : float, optional
-            Apply this price shock to all instruments (overrides scenario).
+            Default shock for instruments without a scenario-specific shock.
         vol_multiplier_all : float, optional
-            Apply this vol multiplier to all instruments.
+            Default multiplier for instruments without a scenario-specific value.
         """
+        if scenario.correlation_override is not None:
+            raise NotImplementedError("Correlation stress requires re-simulation; terminal-return overrides are unsupported")
+        if not np.isfinite(scenario.n_paths_pct) or not 0 <= scenario.n_paths_pct <= 1:
+            raise ValueError("n_paths_pct must be between 0 and 1")
+        shocks = list(scenario.price_shocks.values()) + ([] if price_shock_all is None else [price_shock_all])
+        multipliers = list(scenario.vol_multipliers.values()) + ([] if vol_multiplier_all is None else [vol_multiplier_all])
+        if any(not np.isfinite(x) or x <= -1 for x in shocks):
+            raise ValueError("Price shocks must be finite and greater than -1")
+        if any(not np.isfinite(x) or x < 0 for x in multipliers):
+            raise ValueError("Volatility multipliers must be finite and non-negative")
         n_sims = base_result.terminal_returns.shape[1]
-        n_shocked = max(1, int(n_sims * scenario.n_paths_pct))
+        n_shocked = 0 if scenario.n_paths_pct == 0 else max(1, int(n_sims * scenario.n_paths_pct))
 
         stressed_returns = base_result.terminal_returns.copy()
 
@@ -183,6 +187,8 @@ class StressTester:
 
             # Select worst paths for shocking
             worst_idx = np.argsort(base_rets)[:n_shocked]
+            if n_shocked == 0:
+                continue
 
             # Price shock
             shock = scenario.price_shocks.get(inst, price_shock_all or 0.0)
@@ -190,7 +196,7 @@ class StressTester:
                 stressed_returns[i, worst_idx] += np.log(1 + shock)
 
             # Vol multiplier: scale returns away from mean
-            vol_mult = scenario.vol_multipliers.get(inst, vol_multiplier_all or 1.0)
+            vol_mult = scenario.vol_multipliers.get(inst, 1.0 if vol_multiplier_all is None else vol_multiplier_all)
             if vol_mult != 1.0:
                 mean_ret = base_rets[worst_idx].mean()
                 stressed_returns[i, worst_idx] = (
@@ -235,8 +241,7 @@ class StressTester:
         shocks = [
             (DEFAULT_STRESS_SCENARIOS[0], -0.20, None),   # Sharp selloff
             (DEFAULT_STRESS_SCENARIOS[1], None,  2.0),    # Vol spike
-            (DEFAULT_STRESS_SCENARIOS[2], None,  1.0),    # Correlation breakdown (vol neutral)
-            (DEFAULT_STRESS_SCENARIOS[3], -0.15, None),   # Supply shock (moderate)
+            (DEFAULT_STRESS_SCENARIOS[2], -0.15, None),   # Supply shock (moderate)
         ]
         results = []
         for scenario, price_shock, vol_mult in shocks:
