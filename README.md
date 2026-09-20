@@ -1,5 +1,7 @@
 # Monte Carlo Risk Engine
 
+[Algorithm guide: pseudocode, time complexity, and memory](docs/ALGORITHM_GUIDE.md).
+
 [![CI](https://github.com/fatehaszaman/monte-carlo-risk-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/fatehaszaman/monte-carlo-risk-engine/actions/workflows/ci.yml)
 
 A Python library for quantitative portfolio risk analysis: correlated Monte Carlo simulation, VaR / CVaR, stress testing, and portfolio aggregation. The engine is designed to be small, transparent, and reproducible, with an emphasis on the property checks and engineering discipline that systematic-research and risk-infrastructure work depend on.
