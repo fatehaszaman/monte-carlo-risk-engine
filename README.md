@@ -21,7 +21,7 @@ Both are reported alongside a historical-simulation baseline so the dependence o
 
 - Correlated multi-instrument GBM simulation with Cholesky-based correlation handling, and a positive-semidefinite repair step for numerically noisy correlation matrices *estimated from history*. A matrix passed in directly by the caller is not repaired and must already be positive definite -- see [KNOWN_ISSUES.md](KNOWN_ISSUES.md) #4.
 - Per-instrument and portfolio-level VaR and CVaR at configurable confidence levels, via either historical simulation or Monte Carlo paths.
-- Pluggable stress-test layer for price and volatility shocks, with a `StressScenario` dataclass for defining custom ones. Three of the four built-in scenarios do something; `Correlation_Breakdown` is currently inert, and correlation shocks are not implemented at all -- see [KNOWN_ISSUES.md](KNOWN_ISSUES.md) #6 and #7.
+- Pluggable stress-test layer for price and tail-dispersion shocks, with three active built-in scenarios. Correlation overrides raise `NotImplementedError`; no inert correlation scenario is included. These are marginal log-return tail sensitivities, not dollar P&L or joint-event re-simulation. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for interpretation.
 - Portfolio aggregator that computes diversification benefit and per-instrument VaR concentration.
 - Deterministic seeding throughout (`numpy.random.default_rng`) for reproducible runs.
 - A property-based validation script that checks correlation recovery, GBM terminal moments, CVaR-vs-VaR ordering, and diversification non-negativity.
@@ -56,7 +56,7 @@ PYTHONPATH=. python examples/demo.py
 PYTHONPATH=. python examples/validate.py
 ```
 
-The demo prints the simulation parameters, the recovered correlation matrix, per-instrument VaR/CVaR at 95% and 99%, a historical comparison, the four stress scenarios, and a consolidated portfolio risk report.
+The demo prints the simulation parameters, the recovered correlation matrix, per-instrument VaR/CVaR at 95% and 99%, a historical comparison, the three stress scenarios, and a consolidated portfolio risk report.
 
 `examples/validate.py` runs a 20,000-path simulation and asserts five properties: identical paths under a fixed seed, correlation recovery within 0.02 of the input matrix, terminal-return mean within Monte Carlo tolerance of the GBM theoretical value, `CVaR >= VaR` everywhere, and non-negative diversification benefit.
 
@@ -67,7 +67,7 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-70 tests across four files. They are written against the analytic properties of
+Tests are organized by module. They are written against the analytic properties of
 the process the engine claims to simulate rather than against recorded output,
 so they stay meaningful through a refactor:
 
@@ -84,8 +84,10 @@ so they stay meaningful through a refactor:
 Writing them surfaced eight defects. The two highest-severity portfolio VaR
 issues are fixed: terminal log returns are converted to simple returns before
 currency P&L aggregation, and long/short books are normalised by gross exposure.
-The six unresolved items are recorded in [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
-with severity and a proposed fix.
+Silent correlation overrides, the inert default scenario, and misleading
+stress descriptions are now corrected and regression-tested. Correlation
+re-simulation remains unsupported. The three other unresolved items and
+stress-model limitations are recorded in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 Tests that assert a defect say so in the docstring and cite the issue number.
 They pass by pinning the current behaviour, so each fix replaces the defect test

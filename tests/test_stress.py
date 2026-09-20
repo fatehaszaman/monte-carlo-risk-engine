@@ -1,8 +1,6 @@
 """Stress scenarios.
 
-Several scenario descriptions do not match what the code does. Those gaps are
-asserted here so the documentation and the implementation cannot drift further
-apart silently.
+Regression tests cover actual tail transformations and unsupported operations.
 """
 import numpy as np
 import pytest
@@ -67,7 +65,7 @@ def test_summary_dataframe_has_a_row_per_instrument(sim):
 
 
 def test_run_all_returns_every_default_scenario(sim):
-    assert len(StressTester(rng_seed=1).run_all(sim)) == 4
+    assert len(StressTester(rng_seed=1).run_all(sim)) == 3
 
 
 def test_stress_is_deterministic(sim):
@@ -78,67 +76,54 @@ def test_stress_is_deterministic(sim):
 
 # ------------------------------------------------------------------- defects
 
-def test_correlation_override_is_declared_but_never_read(sim):
-    """DEFECT: StressScenario.correlation_override is documented as replacing
-    the correlation matrix for a scenario, and StressTester.apply never reads
-    it.
-
-    Passing it has no effect whatsoever. See KNOWN_ISSUES.md #6.
-    """
-    import inspect
-
-    src = inspect.getsource(StressTester.apply)
-    assert "correlation_override" not in src
-
+def test_correlation_override_fails_explicitly_without_mutating_base(sim):
+    """Regression #6: unsupported stress must not look like a zero impact."""
     st = StressTester(rng_seed=1)
-    with_override = st.apply(
-        sim,
-        StressScenario("S", "d", correlation_override=np.eye(2), n_paths_pct=0.1),
-        price_shock_all=-0.1,
-    )
-    without = st.apply(
-        sim, StressScenario("S", "d", n_paths_pct=0.1), price_shock_all=-0.1
-    )
-    assert np.array_equal(
-        with_override.stressed_terminal_returns, without.stressed_terminal_returns
-    )
+    original = sim.terminal_returns.copy()
+    with pytest.raises(NotImplementedError, match="re-simulation"):
+        st.apply(sim, StressScenario("S", "d", correlation_override=np.eye(2)),
+                 price_shock_all=-0.1)
+    assert np.array_equal(original, sim.terminal_returns)
 
 
-def test_correlation_breakdown_scenario_is_a_no_op(sim):
-    """DEFECT, consequence of #6: the shipped Correlation_Breakdown scenario
-    changes nothing at all.
-
-    run_all passes it price_shock=None and vol_mult=1.0, and it carries no
-    price_shocks or vol_multipliers of its own, so every reported shift is
-    exactly zero. One of four advertised scenarios is inert.
-    See KNOWN_ISSUES.md #7.
-    """
+def test_defaults_do_not_include_an_inert_correlation_scenario(sim):
+    """Regression #7: every shipped scenario transforms the test paths."""
     results = {r.scenario_name: r for r in StressTester(rng_seed=1).run_all(sim)}
-    cb = results["Correlation_Breakdown"]
-    assert np.array_equal(cb.stressed_terminal_returns, sim.terminal_returns)
-    assert all(v == pytest.approx(0.0) for v in cb.var_95_shift.values())
-    assert all(v == pytest.approx(0.0) for v in cb.cvar_95_shift.values())
+    assert "Correlation_Breakdown" not in results
+    for r in results.values():
+        assert not np.array_equal(r.stressed_terminal_returns, sim.terminal_returns)
 
 
-def test_scenario_descriptions_do_not_match_what_is_applied(sim):
-    """DEFECT: descriptions overstate the scenarios.
-
-    - Sharp_Selloff says "Broad 20% price decline across all instruments" but
-      only the worst 5% of paths are shocked, so the central distribution is
-      untouched.
-    - Supply_Shock says "Primary commodity -30%, secondary instruments -10%"
-      but run_all applies a flat -15% to everything, with no notion of primary
-      versus secondary.
-
-    See KNOWN_ISSUES.md #8.
-    """
+def test_default_descriptions_match_applied_price_shocks(sim):
+    """Regression #8: the named percentage and path fraction are accurate."""
     selloff = DEFAULT_STRESS_SCENARIOS[0]
-    assert "across all instruments" in selloff.description
-    assert selloff.n_paths_pct == 0.05, "only 5% of paths, not all of them"
+    supply = DEFAULT_STRESS_SCENARIOS[2]
+    assert "20%" in selloff.description and "worst 5%" in selloff.description
+    assert "15%" in supply.description and "worst 5%" in supply.description
+    results = StressTester().run_all(sim)
+    for result, shock in [(results[0], -0.2), (results[2], -0.15)]:
+        changed = result.stressed_terminal_returns - sim.terminal_returns
+        for row in changed:
+            assert np.count_nonzero(row) == int(row.size * 0.05)
+            assert np.allclose(row[row != 0], np.log1p(shock))
 
-    supply = DEFAULT_STRESS_SCENARIOS[3]
-    assert "-30%" in supply.description and "-10%" in supply.description
-    assert supply.price_shocks == {}, "no per-instrument shocks are actually defined"
+
+def test_zero_path_fraction_changes_nothing(sim):
+    r = StressTester().apply(sim, StressScenario("zero", "", n_paths_pct=0),
+                             price_shock_all=-0.2, vol_multiplier_all=2)
+    assert np.array_equal(r.stressed_terminal_returns, sim.terminal_returns)
+
+
+@pytest.mark.parametrize("fraction", [-0.1, 1.1, float("nan")])
+def test_invalid_path_fraction_is_rejected(sim, fraction):
+    with pytest.raises(ValueError):
+        StressTester().apply(sim, StressScenario("bad", "", n_paths_pct=fraction))
+
+
+@pytest.mark.parametrize("shock", [-1, -2, float("inf")])
+def test_invalid_log_price_shock_is_rejected(sim, shock):
+    with pytest.raises(ValueError):
+        StressTester().apply(sim, StressScenario("bad", ""), price_shock_all=shock)
 
 
 def test_shocking_only_the_worst_paths_barely_moves_var(sim):
