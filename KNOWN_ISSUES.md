@@ -3,18 +3,15 @@
 Found by writing the test suite. Each item below has a test that pins the
 current behaviour and cites this file by number.
 
-Convention: a test that asserts a defect says so in its docstring. It passes
-today. Fixing the underlying bug will break that test, which is the signal to
-delete the test and the entry together.
+Convention: a test that asserts a defect says so in its docstring. When the bug
+is fixed, that test is replaced with a regression test for the corrected result
+and the issue is removed from this list.
 
-Nothing here is fixed yet. They are recorded rather than patched so the
-behaviour of the published version is documented, and so the fix and the
-description of the fix land in the same commit.
+Only unresolved issues are listed here. Issues 1 and 2 were replaced with
+regression tests after the portfolio P&L and gross-exposure fixes.
 
 | # | Severity | Area | Issue |
 |---|----------|------|-------|
-| 1 | High | `var_cvar.portfolio_monte_carlo` | Log returns used as arithmetic P&L weights |
-| 2 | High | `var_cvar.portfolio_monte_carlo` | Short positions break the normalisation denominator |
 | 3 | Medium | `var_cvar` | CVaR silently reported as equal to VaR when the tail is empty |
 | 4 | Medium | `simulation.simulate` | Caller-supplied correlation matrices skip the PSD repair |
 | 5 | Medium | `simulation._build_correlation_matrix` | Partial history collapses the whole matrix to identity |
@@ -23,52 +20,6 @@ description of the fix land in the same commit.
 | 8 | Low | `stress_test` | Scenario descriptions overstate what is applied |
 
 ---
-
-### 1. Log returns used as arithmetic P&L weights (High)
-
-`SimulationResult.terminal_returns` is `log(S_T / S_0)`, stated in the
-docstring. `portfolio_monte_carlo` then forms portfolio P&L as:
-
-```python
-portfolio_pnl += terminal_rets * pos_value
-```
-
-That is the formula for simple returns. For a position to lose `x` percent of
-its value the simple return must be `-x`; the log return is `log(1-x)`, which is
-more negative. A 50% price fall is booked as a 69.3% loss.
-
-The error grows with the size of the move, so it is largest exactly in the deep
-tail where VaR and CVaR are measured. The direction is conservative — reported
-risk is too high, not too low — but the output is not the quantity it is
-labelled as, and it is inconsistent with the per-instrument path in the same
-module, which reports a log-return quantile.
-
-This also contaminates `PortfolioRiskAggregator.diversification_benefit_var`,
-which subtracts a portfolio number computed one way from a sum of individual
-numbers computed the other way.
-
-Fix: convert once at the boundary, `simple = np.exp(terminal_returns) - 1`, and
-weight with that. Alternatively aggregate on terminal prices rather than
-returns, which avoids the conversion entirely.
-
-Tests: `test_portfolio_var_treats_log_returns_as_arithmetic_pnl`,
-`test_diversification_benefit_mixes_two_different_return_conventions`.
-
-### 2. Short positions break the normalisation denominator (High)
-
-`total_value = sum(position_values.values())` and the percentage conversion is
-guarded by `if total_value > 0`. A short booked as a negative position value
-shrinks the denominator; a hedged book sums to zero and takes the else branch,
-which returns `var_pct` as a raw currency amount in a field named as a
-percentage. There is no error and no warning.
-
-A long/short book is the normal case for the kind of portfolio this library
-describes, so this is not an edge case.
-
-Fix: normalise by gross exposure, `sum(abs(v) for v in position_values.values())`,
-and raise rather than silently changing units when it is zero.
-
-Test: `test_portfolio_normalisation_breaks_with_short_positions`.
 
 ### 3. CVaR silently reported as equal to VaR when the tail is empty (Medium)
 

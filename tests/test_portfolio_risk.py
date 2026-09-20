@@ -26,6 +26,12 @@ def test_total_portfolio_value_sums_the_positions(sim):
     assert rep.total_portfolio_value == 2_000_000.0
 
 
+def test_long_short_report_uses_gross_exposure(sim):
+    rep = PortfolioRiskAggregator().build_report(sim, {"A": 1e6, "B": -1e6})
+    assert rep.total_portfolio_value == 2_000_000.0
+    assert rep.portfolio_var > 0
+
+
 def test_every_instrument_gets_a_var_and_cvar(sim):
     rep = PortfolioRiskAggregator().build_report(sim, POS)
     assert set(rep.individual_var) == {"A", "B"}
@@ -110,17 +116,14 @@ def test_an_instrument_with_no_position_drops_out_of_individual_var(sim):
     assert rep.concentration["var_abs"].iloc[-1] == 0.0
 
 
-def test_diversification_benefit_mixes_two_different_return_conventions(sim):
-    """DEFECT, downstream of #1: individual VaR is a per-instrument log-return
-    quantile, portfolio VaR treats those same log returns as arithmetic P&L
-    weights, and diversification_benefit_var is the difference of the two.
-
-    The subtraction is only meaningful if both sides use one convention. It is
-    reported in currency as though they do. The figure is directionally useful
-    and quantitatively not a number that can be reconciled by hand.
-    See KNOWN_ISSUES.md #1.
-    """
+def test_diversification_benefit_uses_consistent_simple_return_risk(sim):
     rep = PortfolioRiskAggregator().build_report(sim, POS)
+    simple_rets = np.expm1(sim.terminal_returns)
+    expected_individual_var = {
+        name: -np.quantile(simple_rets[i], 0.05) * POS[name]
+        for i, name in enumerate(sim.instruments)
+    }
+    assert rep.individual_var == pytest.approx(expected_individual_var)
     assert rep.diversification_benefit_var == pytest.approx(
         sum(rep.individual_var.values()) - rep.portfolio_var
     )

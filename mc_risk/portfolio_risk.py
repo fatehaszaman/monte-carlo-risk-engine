@@ -39,7 +39,7 @@ class PortfolioRiskReport:
     ----------
     instruments : list[str]
     position_values : dict[str, float]
-    total_portfolio_value : float
+    total_portfolio_value : float              # Gross exposure
     individual_var : dict[str, float]      # 95% VaR per instrument (abs)
     individual_cvar : dict[str, float]     # 95% CVaR per instrument (abs)
     portfolio_var : float                  # Portfolio-level 95% VaR
@@ -64,7 +64,7 @@ class PortfolioRiskReport:
         print("  PORTFOLIO RISK REPORT")
         print("=" * 60)
 
-        print(f"\n  Portfolio Value       : ${self.total_portfolio_value:>15,.2f}")
+        print(f"\n  Gross Exposure        : ${self.total_portfolio_value:>15,.2f}")
         print(f"  Portfolio VaR (95%)   : ${self.portfolio_var:>15,.2f}  "
               f"({self.portfolio_var / self.total_portfolio_value * 100:.2f}%)")
         print(f"  Portfolio CVaR (95%)  : ${self.portfolio_cvar:>15,.2f}  "
@@ -162,7 +162,10 @@ class PortfolioRiskAggregator:
             frames = [r.summary() for r in stress_results]
             stress_summary = pd.concat(frames, ignore_index=True)
 
-        total_value = sum(position_values.values())
+        total_value = sum(
+            abs(position_values.get(instrument, 0))
+            for instrument in sim_result.instruments
+        )
 
         return PortfolioRiskReport(
             instruments=sim_result.instruments,

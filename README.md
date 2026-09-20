@@ -67,7 +67,7 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-68 tests across four files. They are written against the analytic properties of
+70 tests across four files. They are written against the analytic properties of
 the process the engine claims to simulate rather than against recorded output,
 so they stay meaningful through a refactor:
 
@@ -81,15 +81,15 @@ so they stay meaningful through a refactor:
 - Realised correlation of simulated returns is checked directly against the
   requested correlation, not only indirectly through VaR.
 
-Writing them surfaced eight defects, recorded in
-[KNOWN_ISSUES.md](KNOWN_ISSUES.md) with severity and a proposed fix. The two
-highest-severity ones both concern portfolio VaR: log returns are weighted as
-though they were arithmetic returns, and short positions break the
-normalisation denominator so that a percentage field is returned in currency.
+Writing them surfaced eight defects. The two highest-severity portfolio VaR
+issues are fixed: terminal log returns are converted to simple returns before
+currency P&L aggregation, and long/short books are normalised by gross exposure.
+The six unresolved items are recorded in [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
+with severity and a proposed fix.
 
 Tests that assert a defect say so in the docstring and cite the issue number.
-They pass by pinning the current behaviour, so fixing a bug breaks its test,
-which is the signal to delete both.
+They pass by pinning the current behaviour, so each fix replaces the defect test
+with a regression test for the corrected result.
 
 ## Reproducibility
 

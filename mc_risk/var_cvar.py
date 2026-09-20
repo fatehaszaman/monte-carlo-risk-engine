@@ -177,11 +177,19 @@ class VaRCalculator:
         for i, name in enumerate(sim_result.instruments):
             if name not in position_values:
                 continue
-            terminal_rets = sim_result.terminal_returns[i]
             pos_value = position_values[name]
+            gross_exposure = abs(pos_value)
+            simple_rets = np.expm1(sim_result.terminal_returns[i])
+            position_rets = simple_rets * np.sign(pos_value)
             for cl in levels:
                 results.append(
-                    self._compute(terminal_rets, name, pos_value, cl, "monte_carlo")
+                    self._compute(
+                        position_rets,
+                        name,
+                        gross_exposure,
+                        cl,
+                        "monte_carlo",
+                    )
                 )
 
         return results
@@ -211,21 +219,30 @@ class VaRCalculator:
                                   if hasattr(sim_result, 'n_simulations')
                                   else sim_result.terminal_prices.shape[1])
 
-        total_value = 0.0
+        gross_exposure = 0.0
         for i, name in enumerate(sim_result.instruments):
             if name not in position_values:
                 continue
             pos_value = position_values[name]
-            terminal_rets = sim_result.terminal_returns[i]
-            portfolio_pnl += terminal_rets * pos_value
-            total_value += pos_value
+            simple_rets = np.expm1(sim_result.terminal_returns[i])
+            portfolio_pnl += simple_rets * pos_value
+            gross_exposure += abs(pos_value)
 
-        portfolio_returns = portfolio_pnl / total_value if total_value > 0 else portfolio_pnl
+        if gross_exposure == 0:
+            raise ValueError("portfolio gross exposure must be positive")
+
+        portfolio_returns = portfolio_pnl / gross_exposure
 
         results = []
         for cl in levels:
             results.append(
-                self._compute(portfolio_returns, "portfolio", total_value, cl, "monte_carlo")
+                self._compute(
+                    portfolio_returns,
+                    "portfolio",
+                    gross_exposure,
+                    cl,
+                    "monte_carlo",
+                )
             )
         return results
 
