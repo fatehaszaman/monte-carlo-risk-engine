@@ -130,7 +130,7 @@ def test_longer_horizon_increases_var(two_specs):
     assert long.var_pct > short.var_pct
 
 
-# --------------------------------------------------------- portfolio, defects
+# --------------------------------------------------------- portfolio
 
 def test_diversification_reduces_portfolio_var(two_specs):
     """Two uncorrelated positions must be less risky than two identical ones.
@@ -151,51 +151,37 @@ def test_diversification_reduces_portfolio_var(two_specs):
     )
 
 
-def test_portfolio_var_treats_log_returns_as_arithmetic_pnl(two_specs):
-    """DEFECT: SimulationResult.terminal_returns holds LOG returns, but
-    portfolio_monte_carlo computes P&L as `terminal_rets * pos_value`, which is
-    the formula for SIMPLE returns.
-
-    Because log(1+r) < r for losses, this overstates loss magnitude, and it does
-    so most in the deep tail where VaR is actually measured. A 50% price fall is
-    booked as a 69.3% loss.
-
-    Direction is conservative, but the number is not the quantity it claims to
-    be, and it is inconsistent with the per-instrument path which reports
-    percentage VaR on a log basis. See KNOWN_ISSUES.md #1.
-    """
+def test_portfolio_var_converts_log_returns_to_simple_pnl(two_specs):
+    """Portfolio currency P&L must use exact simple returns, not log returns."""
     from mc_risk import MonteCarloEngine
     sim = MonteCarloEngine(4000, 50, seed=3).simulate(two_specs, np.eye(2))
     res = VaRCalculator([0.99]).portfolio_monte_carlo(sim, {"A": 1e6, "B": 1e6})[0]
 
     log_rets = sim.terminal_returns
     simple_rets = np.exp(log_rets) - 1.0
-    pnl_log = (log_rets * 1e6).sum(axis=0) / 2e6
     pnl_simple = (simple_rets * 1e6).sum(axis=0) / 2e6
-
-    var_log = -np.quantile(pnl_log, 0.01)
     var_simple = -np.quantile(pnl_simple, 0.01)
 
-    assert res.var_pct == pytest.approx(var_log, rel=1e-9), "confirms log basis"
-    assert var_log > var_simple, "overstates the loss relative to simple returns"
+    assert res.var_pct == pytest.approx(var_simple, rel=1e-9)
+    assert res.var_abs == pytest.approx(var_simple * 2e6, rel=1e-9)
 
 
-def test_portfolio_normalisation_breaks_with_short_positions(two_specs):
-    """DEFECT: total_value sums position values, so a short booked as a negative
-    value shrinks or flips the denominator.
-
-    With +1m and -1m the denominator is zero, the `total_value > 0` guard sends
-    the code down the un-normalised branch, and var_pct is silently returned as
-    a currency amount rather than a percentage. See KNOWN_ISSUES.md #2.
-    """
+def test_portfolio_normalises_long_short_pnl_by_gross_exposure(two_specs):
+    """A market-neutral book still has risk and a well-defined percentage basis."""
     from mc_risk import MonteCarloEngine
     sim = MonteCarloEngine(2000, 20, seed=4).simulate(two_specs, np.eye(2))
     res = VaRCalculator([0.95]).portfolio_monte_carlo(sim, {"A": 1e6, "B": -1e6})[0]
-    assert res.total_value if hasattr(res, "total_value") else True
-    assert abs(res.var_pct) > 1000, (
-        f"var_pct returned {res.var_pct:.2f} — a currency figure in a percentage "
-        "field, because the hedged book normalised by zero"
-    )
+    simple_rets = np.expm1(sim.terminal_returns)
+    expected_returns = (simple_rets[0] * 1e6 - simple_rets[1] * 1e6) / 2e6
+    expected_var = -np.quantile(expected_returns, 0.05)
+
+    assert res.var_pct == pytest.approx(expected_var, rel=1e-9)
+    assert res.var_abs == pytest.approx(expected_var * 2e6, rel=1e-9)
+
+
+def test_portfolio_rejects_zero_gross_exposure(sim):
+    with pytest.raises(ValueError, match="gross exposure"):
+        VaRCalculator([0.95]).portfolio_monte_carlo(sim, {"A": 0.0, "B": 0.0})
 
 
 def test_cvar_silently_equals_var_when_the_tail_is_empty():

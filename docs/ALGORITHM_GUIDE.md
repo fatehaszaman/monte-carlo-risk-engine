@@ -67,5 +67,5 @@ and may retain O(LN) tail values.
 
 Ties at the threshold all enter the tail, so its size need not be exactly
 (1-alpha)N. Empty arrays and NaNs require caller care. The simulation path
-supplies log returns; multiplying them by notional is not the same as computing
-exact simple-return currency losses for large moves.
+supplies log returns; the VaR calculator converts them to simple returns before
+computing signed position P&L and normalises portfolio results by gross exposure.
