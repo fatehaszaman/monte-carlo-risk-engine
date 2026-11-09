@@ -38,6 +38,8 @@ mc_risk/
 examples/
 ├── demo.py             # End-to-end run on a 4-instrument synthetic portfolio
 └── validate.py         # Property checks + a small benchmark
+scripts/
+└── benchmark.py        # Reproduces the Performance table (median of 5 timed runs)
 ```
 
 The data flow is one-directional: `simulation` -> `var_cvar` -> `portfolio_risk`, with `stress_test` reading a `SimulationResult` and producing a `StressResult` that the aggregator consumes. Each module is independently usable and has no hidden state beyond an explicitly seeded RNG.
@@ -102,13 +104,15 @@ with a regression test for the corrected result.
 
 ## Performance
 
-Wall-clock times for the bundled simulation engine, re-measured on a small cloud VM (x86_64, 2 vCPU, numpy 2.5.3). These are illustrative; absolute numbers will vary by hardware.
+`python scripts/benchmark.py`: about 0.3 s median for 4 instruments x 10,000 paths x 252 steps on a small cloud VM (Intel Xeon @ 2.90 GHz, 2 vCPU, Python 3.14, NumPy 2.5). Results vary by hardware.
 
-| Configuration | Wall clock |
+The script builds instruments with fixed drift and volatility and a fixed 0.3 equicorrelation matrix. It uses seed 42 and times `MonteCarloEngine.simulate()` with `time.perf_counter()` over 5 runs. It prints the median, the min and max, and the Python, platform, processor and NumPy versions. `python scripts/benchmark.py --all` runs every configuration below.
+
+| Configuration | Median wall clock |
 |---|---|
-| 4 instruments x 10,000 paths x 252 steps | 0.29 s |
-| 4 instruments x 50,000 paths x 252 steps | 1.63 s |
-| 10 instruments x 10,000 paths x 252 steps | 0.69 s |
+| 4 instruments x 10,000 paths x 252 steps | 0.28 s |
+| 4 instruments x 50,000 paths x 252 steps | 1.58 s |
+| 10 instruments x 10,000 paths x 252 steps | 0.63 s |
 
 The engine is single-threaded NumPy with a Python-level loop over time steps; it has not been tuned for production-scale workloads. Vectorising the time loop or moving to a compiled backend would be the obvious next step if throughput mattered.
 
