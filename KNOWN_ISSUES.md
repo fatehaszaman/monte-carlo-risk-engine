@@ -14,15 +14,6 @@ and explicit tail count rather than silently substituting VaR.
 
 Test: `test_cvar_silently_equals_var_when_the_tail_is_empty`.
 
-### #4: Caller-supplied correlation conditioning
-
-Estimated correlation matrices have a repair path, but caller-supplied
-matrices go directly to Cholesky. They must be positive definite; a singular
-perfect-correlation matrix raises `LinAlgError`. Validation and a documented
-positive-semidefinite factorization policy remain unimplemented.
-
-Test: `test_user_supplied_correlation_bypasses_the_psd_repair`.
-
 ### #5: Partial return history
 
 If any instrument lacks history, correlation estimation falls back to an
@@ -47,6 +38,13 @@ Test: `test_log_returns_history_understates_drift_by_half_variance`.
 
 - **#1 and #2:** Earlier fixes convert log returns to arithmetic returns for
   currency P&L and use gross exposure to normalize long/short portfolios.
+- **#4:** Caller-supplied correlation matrices are now validated (square,
+  symmetric, unit diagonal, entries in [-1, 1]). Positive-definite matrices use
+  Cholesky; positive-semidefinite ones, such as perfect correlation, use an exact
+  eigendecomposition factor; anything with a materially negative eigenvalue
+  raises `ValueError` instead of being silently altered.
+  Tests: `test_user_supplied_perfect_correlation_simulates`,
+  `test_invalid_user_correlation_is_rejected`.
 - **#6:** A non-None `correlation_override` now raises `NotImplementedError`
   before touching the base result. Correlation stress is still unsupported,
   not implemented by this change. It needs a separate simulation with the

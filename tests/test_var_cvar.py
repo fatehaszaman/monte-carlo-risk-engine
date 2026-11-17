@@ -199,15 +199,24 @@ def test_cvar_silently_equals_var_when_the_tail_is_empty():
     assert len(res.tail_returns) > 0 or res.cvar_pct == res.var_pct
 
 
-def test_user_supplied_correlation_bypasses_the_psd_repair(two_specs):
-    """DEFECT: _build_correlation_matrix repairs a non-positive-definite
-    estimated matrix by eigenvalue shifting, but simulate() applies Cholesky
-    directly to a caller-supplied matrix with no such repair.
-
-    Perfect correlation is a legitimate stress assumption — "assume everything
-    moves together" — and it raises LinAlgError instead of simulating.
-    See KNOWN_ISSUES.md #4.
-    """
+def test_user_supplied_perfect_correlation_simulates(two_specs):
+    """FIXED (KNOWN_ISSUES.md #4): a caller-supplied perfect-correlation
+    matrix is a valid stress assumption. It used to raise LinAlgError in
+    Cholesky; it now uses an exact eigendecomposition factor."""
     from mc_risk import MonteCarloEngine
-    with pytest.raises(np.linalg.LinAlgError, match="not positive definite"):
-        MonteCarloEngine(100, 5, seed=1).simulate(two_specs, np.ones((2, 2)))
+    result = MonteCarloEngine(2000, 5, seed=1).simulate(two_specs, np.ones((2, 2)))
+    r = np.diff(np.log(result.paths), axis=2)
+    a, b = r[0].ravel(), r[1].ravel()
+    assert np.corrcoef(a, b)[0, 1] > 0.999
+
+
+def test_invalid_user_correlation_is_rejected(two_specs):
+    """A matrix that is not a correlation matrix raises ValueError rather
+    than being silently repaired."""
+    from mc_risk import MonteCarloEngine
+    bad = np.array([[1.0, 0.9, 0.9], [0.9, 1.0, -0.9], [0.9, -0.9, 1.0]])
+    eng = MonteCarloEngine(100, 5, seed=1)
+    with pytest.raises(ValueError, match="positive semidefinite"):
+        eng.simulate([*two_specs, two_specs[0]], bad)
+    with pytest.raises(ValueError, match="symmetric"):
+        eng.simulate(two_specs, np.array([[1.0, 0.5], [0.2, 1.0]]))

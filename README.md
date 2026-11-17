@@ -19,7 +19,7 @@ Both are reported alongside a historical-simulation baseline so the dependence o
 
 ## Features
 
-- Correlated multi-instrument GBM simulation with Cholesky-based correlation handling, and a positive-semidefinite repair step for numerically noisy correlation matrices *estimated from history*. A matrix passed in directly by the caller is not repaired and must already be positive definite -- see [KNOWN_ISSUES.md](KNOWN_ISSUES.md) #4.
+- Correlated multi-instrument GBM simulation with Cholesky-based correlation handling, and a positive-semidefinite repair step for numerically noisy correlation matrices *estimated from history*. A matrix passed in directly by the caller is validated and factorized exactly, including singular stress cases such as perfect correlation; invalid matrices raise `ValueError` rather than being silently changed -- see [KNOWN_ISSUES.md](KNOWN_ISSUES.md) #4.
 - Per-instrument and portfolio-level VaR and CVaR at configurable confidence levels, via either historical simulation or Monte Carlo paths.
 - Pluggable stress-test layer for price and tail-dispersion shocks, with three active built-in scenarios. Correlation overrides raise `NotImplementedError`; no inert correlation scenario is included. These are marginal log-return tail sensitivities, not dollar P&L or joint-event re-simulation. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for interpretation.
 - Portfolio aggregator that computes diversification benefit and per-instrument VaR concentration.

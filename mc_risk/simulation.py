@@ -88,6 +88,38 @@ class SimulationResult:
     params: dict
 
 
+def _correlation_factor(corr: np.ndarray, tol: float = 1e-8) -> np.ndarray:
+    """Return a factor F with F @ F.T == corr for a valid correlation matrix.
+
+    Validates shape, symmetry, unit diagonal and entry bounds. Uses Cholesky
+    when the matrix is positive definite (O(n^3), cheapest and exact). When it
+    is only positive semidefinite (for example perfect correlation, a valid
+    stress assumption), falls back to an eigendecomposition factor
+    V * sqrt(max(lambda, 0)), which reproduces the input exactly. Matrices with
+    eigenvalues below -tol are not correlation matrices and raise ValueError
+    instead of being silently altered.
+    """
+    corr = np.asarray(corr, dtype=float)
+    if corr.ndim != 2 or corr.shape[0] != corr.shape[1]:
+        raise ValueError(f"correlation matrix must be square, got {corr.shape}")
+    if not np.allclose(corr, corr.T, atol=tol):
+        raise ValueError("correlation matrix must be symmetric")
+    if not np.allclose(np.diag(corr), 1.0, atol=tol):
+        raise ValueError("correlation matrix must have a unit diagonal")
+    if np.any(np.abs(corr) > 1.0 + tol):
+        raise ValueError("correlation entries must lie in [-1, 1]")
+    try:
+        return np.linalg.cholesky(corr)
+    except np.linalg.LinAlgError:
+        eigvals, eigvecs = np.linalg.eigh(corr)
+        if eigvals.min() < -tol:
+            raise ValueError(
+                f"correlation matrix is not positive semidefinite "
+                f"(min eigenvalue {eigvals.min():.3g})"
+            )
+        return eigvecs * np.sqrt(np.clip(eigvals, 0.0, None))
+
+
 class MonteCarloEngine:
     """
     Runs correlated GBM Monte Carlo simulations for a portfolio of instruments.
@@ -201,7 +233,7 @@ class MonteCarloEngine:
             correlation_matrix = self._build_correlation_matrix(specs)
 
         # Cholesky decomposition for correlated draws
-        L = np.linalg.cholesky(correlation_matrix)
+        L = _correlation_factor(correlation_matrix)
 
         # Simulate paths: shape (n_inst, n_simulations, n_steps + 1)
         paths = np.zeros((n_inst, self.n_simulations, self.n_steps + 1))
