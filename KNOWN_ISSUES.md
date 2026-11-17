@@ -33,6 +33,16 @@ report which pairs use explicit assumptions.
 
 Test: `test_partial_history_silently_discards_known_correlation`.
 
+### #9: `returns_history` convention is undocumented
+
+Drift is estimated as the plain mean of `returns_history`, and the GBM step
+then subtracts `sigma^2 / 2`. That is correct for simple daily returns. Log
+returns would understate drift by `sigma^2 / 2`. The docstring now states that
+`returns_history` holds simple daily returns; the engine does not detect or
+convert log returns.
+
+Test: `test_log_returns_history_understates_drift_by_half_variance`.
+
 ## Corrected defects and unsupported functionality
 
 - **#1 and #2:** Earlier fixes convert log returns to arithmetic returns for

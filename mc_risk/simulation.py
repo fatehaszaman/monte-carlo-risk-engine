@@ -46,7 +46,9 @@ class InstrumentSpec:
     sigma : float, optional
         Annual volatility. Estimated from history if None.
     returns_history : np.ndarray, optional
-        Historical daily returns used to estimate mu/sigma and correlation.
+        Historical simple daily returns, (P_t / P_{t-1}) - 1, used to estimate
+        mu/sigma and correlation. Passing log returns understates drift by
+        sigma^2 / 2. See KNOWN_ISSUES.md #9.
     """
     name: str
     current_price: float

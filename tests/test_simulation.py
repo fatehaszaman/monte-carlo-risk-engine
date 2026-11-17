@@ -92,6 +92,23 @@ def test_parameters_are_estimated_and_annualised_from_history():
     assert sim.params["mus"][0] == pytest.approx(0.10, rel=0.20)
 
 
+def test_log_returns_history_understates_drift_by_half_variance():
+    """DEFECT: returns_history is read as simple daily returns. Drift is its
+    plain mean, and the GBM step subtracts sigma^2 / 2 again, so log returns
+    understate drift by sigma^2 / 2. Nothing detects the convention.
+    See KNOWN_ISSUES.md #9.
+    """
+    mu, sigma, days = 0.10, 0.20, 252
+    z = np.random.default_rng(9).standard_normal(5000)
+    z = (z - z.mean()) / z.std()   # exact mean 0, std 1
+    log_daily = (mu - 0.5 * sigma**2) / days + sigma / np.sqrt(days) * z
+    sim = MonteCarloEngine(100, 10, seed=1).simulate(
+        [InstrumentSpec("A", 100.0, returns_history=log_daily)], np.eye(1)
+    )
+    assert sim.params["sigmas"][0] == pytest.approx(sigma)
+    assert sim.params["mus"][0] == pytest.approx(mu - 0.5 * sigma**2)
+
+
 def test_missing_parameters_fall_back_to_documented_defaults():
     sim = MonteCarloEngine(50, 5, seed=1).simulate(
         [InstrumentSpec("A", 100.0)], np.eye(1)
